@@ -5,7 +5,7 @@ export default function App() {
   const [chat, setChat] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const WORKER_URL = import.meta.env.VITE_WORKER_URL || "https://v3-lite-api.xxx.workers.dev";
+  const WORKER_URL = import.meta.env.VITE_WORKER_URL || "https://v3-lite-api.workers.dev";
 
   const sendMsg = async () => {
     if (!input.trim()) return;
