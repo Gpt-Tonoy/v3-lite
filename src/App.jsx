@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { marked } from "marked";
 import hljs from "highlight.js";
 
-// Backend Worker URL — .env এ VITE_WORKER_URL সেট করো (deploy করার পর)
-const WORKER_URL = import.meta.env.VITE_WORKER_URL || "http://localhost:8787";
+// একই Worker frontend + API দুটোই serve করে, তাই ডিফল্ট খালি (relative path) থাকবে।
+// আলাদা backend URL ব্যবহার করতে চাইলে (যেমন লোকাল ডেভেলপমেন্টে) VITE_WORKER_URL সেট করো।
+const WORKER_URL = import.meta.env.VITE_WORKER_URL || "";
 
 marked.setOptions({
   highlight: (code, lang) => {
