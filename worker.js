@@ -28,29 +28,75 @@ function base64ToBytes(base64) {
   return bytes;
 }
 
+async function callGeminiText(env, messages) {
+  // Gemini-কে শুধু টেক্সট conversation হিসেবে পাঠানো — Groq এর মতো system/user/assistant
+  // ফরম্যাট না, তাই ছোট করে একটাই prompt বানিয়ে দিচ্ছি
+  const conversation = messages
+    .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
+    .join("\n");
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [{ text: `${SYSTEM_PROMPT}\n\n${conversation}\n\nAssistant:` }],
+          },
+        ],
+      }),
+    }
+  );
+
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+}
+
 async function handleChat(request, env) {
   const { messages } = await request.json();
   if (!Array.isArray(messages) || messages.length === 0) {
     return json({ error: "messages array লাগবে" }, 400);
   }
 
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.GROQ_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
-      messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
-      temperature: 0.2,
-      max_tokens: 2048,
-    }),
-  });
+  // প্রথমে Groq দিয়ে চেষ্টা করা
+  try {
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.GROQ_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+        messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
+        temperature: 0.2,
+        max_tokens: 2048,
+      }),
+    });
 
-  if (!res.ok) return json({ error: "Groq error", detail: await res.text() }, res.status);
-  const data = await res.json();
-  return json({ reply: data.choices?.[0]?.message?.content ?? "" });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    const reply = data.choices?.[0]?.message?.content ?? "";
+    return json({ reply, provider: "groq" });
+  } catch (groqErr) {
+    // Groq fail করলে Gemini দিয়ে fallback
+    try {
+      const reply = await callGeminiText(env, messages);
+      return json({ reply, provider: "gemini-fallback" });
+    } catch (geminiErr) {
+      return json(
+        {
+          error: "দুটো AI-ই fail করেছে",
+          groq_detail: String(groqErr),
+          gemini_detail: String(geminiErr),
+        },
+        502
+      );
+    }
+  }
 }
 
 async function handleVision(request, env) {
