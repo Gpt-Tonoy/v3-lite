@@ -131,6 +131,8 @@ async function handleTTS(request, env) {
   });
 }
 
+const API_ROUTES = new Set(["/chat", "/vision", "/stt", "/tts"]);
+
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") {
@@ -138,14 +140,21 @@ export default {
     }
 
     const url = new URL(request.url);
-    try {
-      if (request.method === "POST" && url.pathname === "/chat") return await handleChat(request, env);
-      if (request.method === "POST" && url.pathname === "/vision") return await handleVision(request, env);
-      if (request.method === "POST" && url.pathname === "/stt") return await handleSTT(request, env);
-      if (request.method === "POST" && url.pathname === "/tts") return await handleTTS(request, env);
-      return json({ error: "Not found. Use /chat, /vision, /stt, or /tts" }, 404);
-    } catch (err) {
-      return json({ error: "Server error", detail: String(err) }, 500);
+
+    // API routes — শুধু এই ৪টা পাথ ব্যাকএন্ড হিসেবে হ্যান্ডেল হবে
+    if (API_ROUTES.has(url.pathname)) {
+      if (request.method !== "POST") return json({ error: "POST দিয়ে কল করো" }, 405);
+      try {
+        if (url.pathname === "/chat") return await handleChat(request, env);
+        if (url.pathname === "/vision") return await handleVision(request, env);
+        if (url.pathname === "/stt") return await handleSTT(request, env);
+        if (url.pathname === "/tts") return await handleTTS(request, env);
+      } catch (err) {
+        return json({ error: "Server error", detail: String(err) }, 500);
+      }
     }
+
+    // বাকি সব রিকোয়েস্ট (/, /index.html, /assets/...) → React build (./dist) থেকে serve
+    return env.ASSETS.fetch(request);
   },
 };
